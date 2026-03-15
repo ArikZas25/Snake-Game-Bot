@@ -44,11 +44,3 @@ if __name__ == "__main__":
 
     # This should print exactly 4 values — one Q-value per action
     # Action 0 = Up, 1 = Right, 2 = Down, 3 = Left
-```
-
----
-
-Run it and you should see something like:
-```
-Input:  tensor([0.23, 0.87, 0.45, ...])   ← 11 numbers
-Output: tensor([0.12, -0.34, 0.56, 0.01]) ← 4 numbers
