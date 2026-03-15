@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+# numpy does math, torch does math and learns from mistakes
+
 # ── WHAT IS A LINEAR LAYER? ───────────────────────────────────────────────────
 # nn.Linear(in, out) does this math: output = input × weight + bias
 # It takes an array of `in` numbers and transforms it into `out` numbers
@@ -26,6 +28,7 @@ class Linear_QNet(nn.Module):
         x = self.fc2(x)          # pass through layer 2 (no ReLU at output)
         return x
 
+# 11 inputs → 256 hidden → 4 outputs
 
 # ── TEST IT ───────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
@@ -37,6 +40,11 @@ if __name__ == "__main__":
     print(f"Input:  {dummy_state}")
     print(f"Shape:  {dummy_state.shape}")
 
+    # example
+    #  S  r  l   u  R  d  l   A  b  r  l
+    # [1, 0, 0,  0, 1, 0, 0,  1, 0, 0, 0] that is the 11 numbers
+    #  danger    direction     food       == Snake moving right, food is above, wall straight ahead
+
     # Pass it through the network
     output = model(dummy_state)
     print(f"\nOutput: {output}")
@@ -44,3 +52,6 @@ if __name__ == "__main__":
 
     # This should print exactly 4 values — one Q-value per action
     # Action 0 = Up, 1 = Right, 2 = Down, 3 = Left
+# ── TEST IT END ───────────────────────────────────────────────────────────────────
+# Right now the weights are random so the output is meaningless.
+# Training is the process of slowly adjusting those weights until the outputs make sense.
