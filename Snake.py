@@ -91,4 +91,27 @@ class SnakeEnv:
 
         return self.board.copy(), reward, self.done
 
-    
+    def _spawn_food(self) -> None:
+        """
+        Finds all empty spaces and randomly places food.
+        Handles the rare edge case where the board is completely full.
+        """
+        # 1. Find all Y and X coordinates where the board is exactly 0 (empty)
+        empty_y, empty_x = np.where(self.board == 0)
+
+        # 2. Check for a perfect win
+        # If there are no empty spaces, the snake fills the entire board.
+        if len(empty_y) == 0:
+            self.done = True
+            return
+
+        # 3. Choose one random index from the list of empty spaces
+        random_index = np.random.randint(0, len(empty_y))
+
+        # Extract the exact Y and X coordinate
+        food_y = empty_y[random_index]
+        food_x = empty_x[random_index]
+
+        # 4. Save the position and update the board array
+        self.food_pos = (int(food_y), int(food_x))
+        self.board[food_y, food_x] = 3
