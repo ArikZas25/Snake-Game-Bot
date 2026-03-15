@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.optim as optim
 
 # numpy does math, torch does math and learns from mistakes
 
@@ -55,3 +56,52 @@ if __name__ == "__main__":
 # ── TEST IT END ───────────────────────────────────────────────────────────────────
 # Right now the weights are random so the output is meaningless.
 # Training is the process of slowly adjusting those weights until the outputs make sense.
+
+class QTrainer:
+    def __init__(self, model: nn.Module, lr: float, gamma: float):
+        self.lr = lr
+        self.gamma = gamma
+        self.model = model
+
+        # Rule 2 Implementation: The Optimizer and Loss Function
+        self.optimizer = optim.Adam(model.parameters(), lr=self.lr)
+        self.criterion = nn.MSELoss()
+
+    def train_step(self, state, action, reward, next_state, done):
+        # 1. Cast all inputs to PyTorch tensors
+        state = torch.tensor(state, dtype=torch.float)
+        next_state = torch.tensor(next_state, dtype=torch.float)
+        action = torch.tensor(action, dtype=torch.long)
+        reward = torch.tensor(reward, dtype=torch.float)
+        # done can remain a tuple of booleans
+
+        # Handle short memory (single step) by adding a batch dimension (1, x)
+        if len(state.shape) == 1:
+            state = torch.unsqueeze(state, 0)
+            next_state = torch.unsqueeze(next_state, 0)
+            action = torch.unsqueeze(action, 0)
+            reward = torch.unsqueeze(reward, 0)
+            done = (done,)
+
+        # 2. Forward pass: Get predicted Q values with current state
+        pred = self.model(state)
+
+        # 3. Rule 1 Implementation: The Bellman Equation
+        # Clone predictions so we only calculate loss on the action actually taken
+        target = pred.clone()
+        for idx in range(len(done)):
+            Q_new = reward[idx]
+            if not done[idx]:
+                # R + gamma * max(Q(S', a'))
+                Q_new = reward[idx] + self.gamma * torch.max(self.model(next_state[idx]))
+
+            # Map the calculated target Q-value strictly to the action taken
+            # Assuming action is a 1D array/tensor containing the action index (0, 1, 2, or 3)
+            action_idx = action[idx].item() if action.dim() == 1 else torch.argmax(action[idx]).item()
+            target[idx][action_idx] = Q_new
+
+        # 4. Rule 2 Implementation: Backpropagation
+        self.optimizer.zero_grad()  # Clear old gradients
+        loss = self.criterion(target, pred)  # Calculate MSE Loss
+        loss.backward()  # Compute gradients (Backpropagation)
+        self.optimizer.step()  # Update neural network weights
