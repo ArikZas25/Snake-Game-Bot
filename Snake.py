@@ -86,34 +86,75 @@ class SnakeEnv:
         self.board[food_y, food_x] = 3
 
     def play(self) -> None:
-        import os
+        import pygame
 
-        action_map = {'w': 0, 'd': 1, 's': 2, 'a': 3}
-        symbols = {0: ' . ', 1: ' H ', 2: ' O ', 3: ' F '}
+        CELL_SIZE = 40
+        COLORS = {
+            0: (30, 30, 30),
+            1: (0, 255, 100),  # head
+            2: (0, 180, 60),  # body
+            3: (255, 60, 60),  # food
+        }
+        BG_COLOR = (20, 20, 20)
+        TEXT_COLOR = (255, 255, 255)
+
+        pygame.init()
+        screen = pygame.display.set_mode((self.width * CELL_SIZE, self.height * CELL_SIZE + 40))
+        pygame.display.set_caption("Snake")
+        clock = pygame.time.Clock()
+        font = pygame.font.SysFont("Arial", 24)
 
         self.reset()
         score = 0
+        current_action = 1  # start moving right
 
-        while not self.done:
-            os.system('cls' if os.name == 'nt' else 'clear')
-            print(f"Score: {score}")
-            print(' ---' * self.width)
-            for row in self.board:
-                print('|' + ''.join(symbols[cell] for cell in row) + '|')
-            print(' ---' * self.width)
-            print("Controls: W=Up  S=Down  A=Left  D=Right  Q=Quit")
+        running = True
+        while running:
+            clock.tick(4)  # speed — increase for faster snake
 
-            key = input("Move: ").strip().lower()
-            if key == 'q':
-                break
-            if key not in action_map:
-                continue
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                if event.type == pygame.KEYDOWN:
+                    if event.key in (pygame.K_w, pygame.K_UP) and current_action != 2:
+                        current_action = 0
+                    elif event.key in (pygame.K_d, pygame.K_RIGHT) and current_action != 3:
+                        current_action = 1
+                    elif event.key in (pygame.K_s, pygame.K_DOWN) and current_action != 0:
+                        current_action = 2
+                    elif event.key in (pygame.K_a, pygame.K_LEFT) and current_action != 1:
+                        current_action = 3
+                    elif event.key == pygame.K_q:
+                        running = False
 
-            _, reward, self.done = self.step(action_map[key])
+            # Move the snake every frame
+            _, reward, self.done = self.step(current_action)
             if reward == 10.0:
                 score += 1
 
-        print(f"\nGame Over! Final Score: {score}")
+            if self.done:
+                running = False
+
+            # Draw
+            screen.fill(BG_COLOR)
+            score_text = font.render(f"Score: {score}", True, TEXT_COLOR)
+            screen.blit(score_text, (10, 5))
+
+            for y in range(self.height):
+                for x in range(self.width):
+                    cell = self.board[y][x]
+                    rect = pygame.Rect(x * CELL_SIZE, y * CELL_SIZE + 40, CELL_SIZE - 2, CELL_SIZE - 2)
+                    pygame.draw.rect(screen, COLORS[cell], rect, border_radius=6)
+
+            pygame.display.flip()
+
+        # Game over screen
+        screen.fill(BG_COLOR)
+        over_text = font.render(f"Game Over! Score: {score}", True, TEXT_COLOR)
+        screen.blit(over_text, (self.width * CELL_SIZE // 2 - 120, self.height * CELL_SIZE // 2))
+        pygame.display.flip()
+        pygame.time.wait(2000)
+        pygame.quit()
 
 
 if __name__ == "__main__":
