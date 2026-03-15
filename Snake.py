@@ -26,7 +26,18 @@ class SnakeEnv:
         self.snake.clear()
         self.done = False
 
-        # TODO: Add logic to place the snake and spawn the first food
+        # Place the snake in the middle of the board
+        mid_x = self.width // 2
+        mid_y = self.height // 2
+        self.snake.append((mid_y, mid_x))  # head
+        self.snake.append((mid_y, mid_x - 1))  # body
+
+        # Mark snake on the board
+        self.board[mid_y][mid_x] = 1  # head = 1
+        self.board[mid_y][mid_x - 1] = 2  # body = 2
+
+        # Spawn food in a random empty cell
+        self._spawn_food()
 
         return self.board.copy()
 
