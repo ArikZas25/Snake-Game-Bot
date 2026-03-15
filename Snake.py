@@ -43,8 +43,52 @@ class SnakeEnv:
         if self.done:
             raise RuntimeError("You must call reset() before stepping a finished game.")
 
-        reward: float = 0.0
+        # 1. Map the action to a direction (Y change, X change)
+        directions = {
+            0: (-1, 0),  # Up: Y decreases
+            1: (0, 1),  # Right: X increases
+            2: (1, 0),  # Down: Y increases
+            3: (0, -1)  # Left: X decreases
+        }
 
-        # TODO: Add movement logic, collision checking, and reward calculation
+        # Calculate the new head coordinates
+        head_y, head_x = self.snake[0]
+        move_y, move_x = directions[action]
+        new_head = (head_y + move_y, head_x + move_x)
+
+        # 2. Check Wall Collisions
+        if (new_head[0] < 0 or new_head[0] >= self.height or
+                new_head[1] < 0 or new_head[1] >= self.width):
+            self.done = True
+            return self.board.copy(), -10.0, self.done
+
+        # 3. Process Food and the Tail
+        reward = 0.0
+        if new_head == self.food_pos:
+            reward = 10.0
+            # We grew! Do not remove the tail.
+            self._spawn_food()  # We will need to create this helper function
+        else:
+            reward = -0.1  # Small penalty for wasting a step
+            # We did not grow. Remove the old tail to move forward.
+            tail_y, tail_x = self.snake.pop()
+            self.board[tail_y, tail_x] = 0  # Clear the tail from the board array
+
+        # 4. Check Body Collisions (Self-Collision)
+        if new_head in self.snake:
+            self.done = True
+            return self.board.copy(), -10.0, self.done
+
+        # 5. Update the Data Structures
+        self.snake.appendleft(new_head)  # Add new head to the front of the queue
+
+        # Update the board array to show the new snake body and head
+        if len(self.snake) > 1:
+            old_head = self.snake[1]
+            self.board[old_head[0], old_head[1]] = 1  # Mark old head as body (1)
+
+        self.board[new_head[0], new_head[1]] = 2  # Mark new head as head (2)
 
         return self.board.copy(), reward, self.done
+
+    
