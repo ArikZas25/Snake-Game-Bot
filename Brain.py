@@ -88,7 +88,7 @@ class QTrainer:
 
         # 3. Rule 1 Implementation: The Bellman Equation
         # Clone predictions so we only calculate loss on the action actually taken
-        target = pred.clone()
+        target = pred.clone().detach()
         for idx in range(len(done)):
             Q_new = reward[idx]
             if not done[idx]:

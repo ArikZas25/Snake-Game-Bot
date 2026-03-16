@@ -21,8 +21,8 @@ class Agent:
         # O(1) time complexity for appending/popping from ends
         self.memory = deque(maxlen=MAX_MEMORY)
 
-        # Instantiate the neural network (11 inputs, 256 hidden, 4 outputs)
-        self.model = Linear_QNet(18, 256, 4)
+        # Instantiate the neural network (11 inputs, 256 hidden, 3 outputs)
+        self.model = Linear_QNet(18, 256, 3)
 
         # Initialize the trainer with the learning rate and discount factor
         self.trainer = QTrainer(self.model, lr=LR, gamma=self.gamma)
@@ -58,11 +58,11 @@ class Agent:
         Implements the epsilon-greedy policy for action selection.
         """
         # Epsilon decay: The randomness decreases linearly as n_games increases.
-        self.epsilon = max(5, 1000 - self.n_games)
+        self.epsilon = max(0, 200 - self.n_games)
 
         if random.randint(0, 200) < self.epsilon:
             # Exploration: Choose a random action
-            final_move = random.randint(0, 3)
+            final_move = random.randint(0, 2)
         else:
             # Exploitation: Forward pass through the network
             state_tensor = torch.tensor(state, dtype=torch.float)
@@ -95,42 +95,49 @@ def train():
         # 1. Extract the current state
         state_old = agent.get_state(game, current_action)
 
-        # 2. Agent predicts the optimal move (or explores randomly)
-        final_move = agent.get_action(state_old)
+        # 2. Agent predicts the optimal RELATIVE move: 0=Straight, 1=Right Turn, 2=Left Turn
+        relative_move = agent.get_action(state_old)
 
-        # Update current action for the next state extraction
-        current_action = final_move
+        # 3. Translate Relative Move to Absolute Heading
+        # Clockwise order mapping: 0=Up, 1=Right, 2=Down, 3=Left
+        clock_wise = [0, 1, 2, 3]
+        idx = clock_wise.index(current_action)
 
-        # 3. Environment processes the move
-        board, reward, done = game.step(final_move)
+        if relative_move == 0:
+            absolute_move = clock_wise[idx]  # No change, go straight
+        elif relative_move == 1:
+            absolute_move = clock_wise[(idx + 1) % 4]  # Turn right (clockwise)
+        else:  # relative_move == 2
+            absolute_move = clock_wise[(idx - 1) % 4]  # Turn left (counter-clockwise)
 
-        # Track score (Food yields a reward of 10.0)
+        # Update current action for state extraction BEFORE the next frame
+        current_action = absolute_move
+
+        # 4. Environment processes the ABSOLUTE move
+        board, reward, done = game.step(absolute_move)
+
         if reward == 10.0:
             score += 1
 
-        # 4. Extract the newly resulting state
+        # 5. Extract the newly resulting state
         state_new = agent.get_state(game, current_action)
 
-        # 5. Train the short-term memory (single step)
-        agent.train_short_memory(state_old, final_move, reward, state_new, done)
+        # 6. Train short-term memory using the RELATIVE move
+        agent.train_short_memory(state_old, relative_move, reward, state_new, done)
 
-        # 6. Store the transition in the replay memory buffer
-        agent.remember(state_old, final_move, reward, state_new, done)
+        # 7. Store the transition in memory using the RELATIVE move
+        agent.remember(state_old, relative_move, reward, state_new, done)
 
-        # 7. Evaluate terminal state
+        # 8. Evaluate terminal state
         if done:
-            # The game ended. Reset the environment and train on the batch.
             game.reset()
             agent.n_games += 1
             agent.train_long_memory()
 
             if score > record:
                 record = score
-                # Note: Model saving logic belongs here
 
             print(f"Game: {agent.n_games} | Score: {score} | Record: {record}")
-
-            # Reset score for the next game iteration
             score = 0
 
 
