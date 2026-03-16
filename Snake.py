@@ -57,6 +57,7 @@ class SnakeEnv:
             self.frame_iteration = 0
         elif self.frame_iteration > 100 * len(self.snake):
             self.frame_iteration = 0
+            reward = -15.0
             self.done = True
         else:
             reward = -0.1
