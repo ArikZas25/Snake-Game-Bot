@@ -93,7 +93,7 @@ class QTrainer:
             Q_new = reward[idx]
             if not done[idx]:
                 # R + gamma * max(Q(S', a'))
-                Q_new = reward[idx] + self.gamma * torch.max(self.model(next_state[idx]))
+                Q_new = reward[idx] + self.gamma * torch.max(self.model(next_state[idx])).item()
 
             # Map the calculated target Q-value strictly to the action taken
             # Assuming action is a 1D array/tensor containing the action index (0, 1, 2, or 3)

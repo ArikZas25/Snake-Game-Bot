@@ -58,7 +58,7 @@ class Agent:
         Implements the epsilon-greedy policy for action selection.
         """
         # Epsilon decay: The randomness decreases linearly as n_games increases.
-        self.epsilon = 80 - self.n_games
+        self.epsilon = max(5, 200 - self.n_games)
 
         if random.randint(0, 200) < self.epsilon:
             # Exploration: Choose a random action
