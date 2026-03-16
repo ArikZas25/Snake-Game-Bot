@@ -8,127 +8,104 @@ from Brain import Linear_QNet, QTrainer
 import json
 import os
 
+# 1. Define hardware accelerator (CUDA for NVIDIA, MPS for Apple Silicon, CPU fallback)
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu"))
+
 # Hyperparameters
 MAX_MEMORY = 100_000
-BATCH_SIZE = 500
+BATCH_SIZE = 1000  # Increased from 500 to handle the larger 104-D state space
 LR = 0.001
 
 
 class Agent:
     def __init__(self):
         self.n_games = 0
-        self.epsilon = 0  # Exploration parameter
-        self.gamma = 0.99  # Discount rate for future rewards
 
-        # O(1) time complexity for appending/popping from ends
+        # CRITICAL FIX: Epsilon must start at 1.0 (100% exploration)
+        self.epsilon = 1.0
+        self.epsilon_min = 0.05
+        self.epsilon_decay = 0.995
+        self.gamma = 0.99  # Discount rate
+
         self.memory = deque(maxlen=MAX_MEMORY)
 
-        # Instantiate the neural network (14 inputs, 256 hidden,128 hidden, 3 outputs)
-        self.model = Linear_QNet(14, 256, 128, 3)
+        # 2. Map the network to the hardware accelerator
+        self.model = Linear_QNet(104, 256, 128, 3).to(DEVICE)
 
-        # Initialize the trainer with the learning rate and discount factor
-        self.trainer = QTrainer(self.model, lr=LR, gamma=self.gamma)
+        # 3. Pass the device context to the trainer
+        self.trainer = QTrainer(self.model, lr=LR, gamma=self.gamma, device=DEVICE)
 
     def get_state(self, game, current_action: int) -> np.ndarray:
-        """Delegates state extraction to the dedicated module."""
         return StateExtractor.get_state(game, current_action)
 
     def remember(self, state: np.ndarray, action: int, reward: float, next_state: np.ndarray, done: bool) -> None:
-        """Stores the transition tuple into the replay memory."""
         self.memory.append((state, action, reward, next_state, done))
 
     def train_long_memory(self) -> None:
         """Experience Replay: Trains the model on a randomized batch of past experiences."""
+        if len(self.memory) == 0:
+            return
+
+        # Cast to list prevents TypeError in Python 3.11+ when sampling deques
         if len(self.memory) > BATCH_SIZE:
-            mini_sample = random.sample(self.memory, BATCH_SIZE)
+            mini_sample = random.sample(list(self.memory), BATCH_SIZE)
         else:
             mini_sample = self.memory
 
-        # Unzip the tuples into distinct arrays
         states, actions, rewards, next_states, dones = zip(*mini_sample)
-
         self.trainer.train_step(states, actions, rewards, next_states, dones)
 
-    def train_short_memory(self, state: np.ndarray, action: int, reward: float, next_state: np.ndarray,
-                           done: bool) -> None:
-        """Trains the model immediately on the most recent single step."""
-        self.trainer.train_step(state, action, reward, next_state, done)
-        pass
-
     def get_action(self, state: np.ndarray) -> int:
-        """
-        Implements the epsilon-greedy policy for action selection.
-        """
-        # Epsilon decay: The randomness decreases linearly as n_games increases.
-        self.epsilon = max(0.05, self.epsilon * 0.995)
-
-        if random.randint(0, 200) < self.epsilon:
-            # Exploration: Choose a random action
+        """Implements the epsilon-greedy policy for action selection."""
+        # Standard uniform probability check between [0.0, 1.0)
+        if random.random() < self.epsilon:
             final_move = random.randint(0, 2)
         else:
-            # Exploitation: Forward pass through the network
-            state_tensor = torch.tensor(state, dtype=torch.float)
+            # 4. Zero-copy memory mapping, sent directly to DEVICE
+            state_tensor = torch.from_numpy(state).float().to(DEVICE)
             prediction = self.model(state_tensor)
-
-            # Select the action index with the highest Q-value
             final_move = torch.argmax(prediction).item()
 
         return final_move
 
 
 def train():
-    """
-    The main execution loop for the DQN Agent.
-    Orchestrates the environment, state extraction, action selection, and backpropagation.
-    """
     record = 0
     score = 0
     agent = Agent()
     game = SnakeEnv()
 
     game.reset()
-
-    # Initialize heading: 1 corresponds to moving Right in your environment logic
     current_action = 1
 
     os.makedirs("replays", exist_ok=True)
-    step_history = []  # Will hold the sequence of frames
+    step_history = []
 
-    print("Beginning Training Loop...")
+    print(f"Beginning Training Loop. Hardware Accelerator: {DEVICE}")
 
     while True:
-
         is_recording = (agent.n_games % 100 == 0)
 
-        # 1. Extract the current state
         state_old = agent.get_state(game, current_action)
-
-        # 2. Agent predicts the optimal RELATIVE move: 0=Straight, 1=Right Turn, 2=Left Turn
         relative_move = agent.get_action(state_old)
 
-        # 3. Translate Relative Move to Absolute Heading
-        # Clockwise order mapping: 0=Up, 1=Right, 2=Down, 3=Left
         clock_wise = [0, 1, 2, 3]
         idx = clock_wise.index(current_action)
 
         if relative_move == 0:
-            absolute_move = clock_wise[idx]  # No change, go straight
+            absolute_move = clock_wise[idx]
         elif relative_move == 1:
-            absolute_move = clock_wise[(idx + 1) % 4]  # Turn right (clockwise)
-        else:  # relative_move == 2
-            absolute_move = clock_wise[(idx - 1) % 4]  # Turn left (counter-clockwise)
+            absolute_move = clock_wise[(idx + 1) % 4]
+        else:
+            absolute_move = clock_wise[(idx - 1) % 4]
 
-        # Update current action for state extraction BEFORE the next frame
         current_action = absolute_move
-
-        # 4. Environment processes the ABSOLUTE move
         board, reward, done = game.step(absolute_move)
 
         if reward == 10.0:
             score += 1
 
         if is_recording:
-            # Cast NumPy types to native Python ints for JSON serialization
             frame_data = {
                 "snake": [[int(y), int(x)] for y, x in game.snake],
                 "food": [int(game.food_pos[0]), int(game.food_pos[1])],
@@ -136,35 +113,31 @@ def train():
             }
             step_history.append(frame_data)
 
-
-        # 5. Extract the newly resulting state
         state_new = agent.get_state(game, current_action)
 
-        # 6. Train short-term memory using the RELATIVE move
-        agent.train_short_memory(state_old, relative_move, reward, state_new, done)
-
-        # 7. Store the transition in memory using the RELATIVE move
+        # Store transition. Note: We DO NOT train on a single step anymore.
         agent.remember(state_old, relative_move, reward, state_new, done)
 
-        # 8. Evaluate terminal state
         if done:
-            #Save to Disk if we were recording
+            # Decay epsilon at the end of the episode
+            agent.epsilon = max(agent.epsilon_min, agent.epsilon * agent.epsilon_decay)
+
             if is_recording and step_history:
                 filename = f"replays/run_{agent.n_games}.json"
                 with open(filename, "w") as f:
                     json.dump(step_history, f)
-                print(f"[*] Saved replay telemetry: {filename}")
 
-                # Reset variables for the next game
             step_history = []
             game.reset()
             agent.n_games += 1
+
+            # Execute batch training only between games
             agent.train_long_memory()
 
             if score > record:
                 record = score
 
-            print(f"Game: {agent.n_games} | Score: {score} | Record: {record}")
+            print(f"Game: {agent.n_games} | Score: {score} | Record: {record} | Epsilon: {agent.epsilon:.3f}")
             score = 0
 
 

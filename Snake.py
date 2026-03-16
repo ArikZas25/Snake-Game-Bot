@@ -1,7 +1,7 @@
 import numpy as np
 from collections import deque
 from typing import Tuple
-from StateExtractor import StateExtractor
+
 
 class SnakeEnv:
     def __init__(self, width: int = 10, height: int = 10) -> None:
@@ -28,7 +28,9 @@ class SnakeEnv:
         self.board[mid_y][mid_x - 1] = 2
 
         self._spawn_food()
-        return self.board.copy()
+
+        # Returning reference directly instead of copying memory
+        return self.board
 
     def step(self, action: int) -> Tuple[np.ndarray, float, bool]:
         if self.done:
@@ -49,7 +51,7 @@ class SnakeEnv:
         if (new_head[0] < 0 or new_head[0] >= self.height or
                 new_head[1] < 0 or new_head[1] >= self.width):
             self.done = True
-            return self.board.copy(), -10.0, self.done
+            return self.board, -10.0, self.done
 
         reward = 0.0
         # 2. Check for food consumption
@@ -62,30 +64,20 @@ class SnakeEnv:
             self.frame_iteration = 0
             reward = -11.0
             self.done = True
-            return self.board.copy(), reward, self.done
+            return self.board, reward, self.done
         # 4. Default move (empty square)
         else:
             reward = 0
             tail_y, tail_x = self.snake.pop()
             self.board[tail_y, tail_x] = 0
 
-            # --- REWARD SHAPING IMPLEMENTATION ---
-            # Calculate the contiguous safe area starting from the new head position
-            available_volume = StateExtractor.flood_fill(self, new_head[0], new_head[1])
-
-            # The true mass of the snake is its current length in memory + 1 (the new head)
-            snake_mass = len(self.snake) + 1
-
-            # If the volume of the space is less than the snake's mass, it is a deterministic trap
-            if available_volume < snake_mass:
-                reward = -5.0  # Apply the intermediate penalty
-            # -------------------------------------
+            # NOTE: Manual Flood-Fill Reward Shaping has been removed here.
+            # The 104-D neural network will implicitly learn to avoid traps.
 
         # 5. Check for body collisions
         if new_head in self.snake:
             self.done = True
-            # This terminal penalty will safely overwrite the -5.0 if the trap causes immediate death
-            return self.board.copy(), -10.0, self.done
+            return self.board, -10.0, self.done
 
         # 6. Update internal state
         self.snake.appendleft(new_head)
@@ -96,7 +88,8 @@ class SnakeEnv:
 
         self.board[new_head[0], new_head[1]] = 2
 
-        return self.board.copy(), reward, self.done
+        # Returning reference directly instead of copying memory
+        return self.board, reward, self.done
 
     def _spawn_food(self) -> None:
         empty_y, empty_x = np.where(self.board == 0)
@@ -184,10 +177,6 @@ class SnakeEnv:
         pygame.quit()
 
     def render(self, score: int = 0, record: int = 0, fps: int = 10) -> None:
-        """
-        Renders a single frame of the environment using Pygame.
-        Lazily initializes the Pygame window to avoid overhead during headless training.
-        """
         import pygame
 
         # 1. Lazy Initialization
@@ -199,7 +188,7 @@ class SnakeEnv:
             self.font = pygame.font.SysFont("Arial", 24)
             self.clock = pygame.time.Clock()
 
-        # 2. Event Pumping (Prevents OS "Not Responding" errors)
+        # 2. Event Pumping
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -229,7 +218,8 @@ class SnakeEnv:
 
         # 6. Update Display and Regulate Speed
         pygame.display.flip()
-        self.clock.tick(fps)  # Regulate frame rate so the human eye can track the agent
+        self.clock.tick(fps)
+
 
 if __name__ == "__main__":
     game = SnakeEnv()
