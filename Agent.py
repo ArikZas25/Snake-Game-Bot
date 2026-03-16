@@ -5,10 +5,12 @@ from collections import deque
 from Snake import SnakeEnv
 from StateExtractor import StateExtractor
 from Brain import Linear_QNet, QTrainer
+import json
+import os
 
 # Hyperparameters
 MAX_MEMORY = 100_000
-BATCH_SIZE = 128
+BATCH_SIZE = 500
 LR = 0.001
 
 
@@ -89,9 +91,15 @@ def train():
     # Initialize heading: 1 corresponds to moving Right in your environment logic
     current_action = 1
 
+    os.makedirs("replays", exist_ok=True)
+    step_history = []  # Will hold the sequence of frames
+
     print("Beginning Training Loop...")
 
     while True:
+
+        is_recording = (agent.n_games % 100 == 0)
+
         # 1. Extract the current state
         state_old = agent.get_state(game, current_action)
 
@@ -119,6 +127,16 @@ def train():
         if reward == 10.0:
             score += 1
 
+        if is_recording:
+            # Cast NumPy types to native Python ints for JSON serialization
+            frame_data = {
+                "snake": [[int(y), int(x)] for y, x in game.snake],
+                "food": [int(game.food_pos[0]), int(game.food_pos[1])],
+                "score": score
+            }
+            step_history.append(frame_data)
+
+
         # 5. Extract the newly resulting state
         state_new = agent.get_state(game, current_action)
 
@@ -130,6 +148,15 @@ def train():
 
         # 8. Evaluate terminal state
         if done:
+            #Save to Disk if we were recording
+            if is_recording and step_history:
+                filename = f"replays/run_{agent.n_games}.json"
+                with open(filename, "w") as f:
+                    json.dump(step_history, f)
+                print(f"[*] Saved replay telemetry: {filename}")
+
+                # Reset variables for the next game
+            step_history = []
             game.reset()
             agent.n_games += 1
             agent.train_long_memory()

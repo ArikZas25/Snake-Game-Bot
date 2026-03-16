@@ -57,7 +57,7 @@ class SnakeEnv:
             self.frame_iteration = 0
         elif self.frame_iteration > 100 * len(self.snake):
             self.frame_iteration = 0
-            reward = -10.0
+            reward = -11.0
             self.done = True
             return self.board.copy(), reward, self.done
         else:
@@ -164,6 +164,53 @@ class SnakeEnv:
         pygame.time.wait(2000)
         pygame.quit()
 
+    def render(self, score: int = 0, record: int = 0, fps: int = 10) -> None:
+        """
+        Renders a single frame of the environment using Pygame.
+        Lazily initializes the Pygame window to avoid overhead during headless training.
+        """
+        import pygame
+
+        # 1. Lazy Initialization
+        if not hasattr(self, 'screen'):
+            pygame.init()
+            self.CELL_SIZE = 40
+            self.screen = pygame.display.set_mode((self.width * self.CELL_SIZE, self.height * self.CELL_SIZE + 40))
+            pygame.display.set_caption("Snake AI Training - Live View")
+            self.font = pygame.font.SysFont("Arial", 24)
+            self.clock = pygame.time.Clock()
+
+        # 2. Event Pumping (Prevents OS "Not Responding" errors)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                quit()
+
+        # 3. Define Constants
+        COLORS = {
+            0: (30, 30, 30),
+            1: (0, 255, 100),  # head
+            2: (0, 180, 60),  # body
+            3: (255, 60, 60),  # food
+        }
+        BG_COLOR = (20, 20, 20)
+        TEXT_COLOR = (255, 255, 255)
+
+        # 4. Draw Background and Text
+        self.screen.fill(BG_COLOR)
+        score_text = self.font.render(f"Score: {score} | Record: {record}", True, TEXT_COLOR)
+        self.screen.blit(score_text, (10, 5))
+
+        # 5. Draw the Grid
+        for y in range(self.height):
+            for x in range(self.width):
+                cell = self.board[y][x]
+                rect = pygame.Rect(x * self.CELL_SIZE, y * self.CELL_SIZE + 40, self.CELL_SIZE - 2, self.CELL_SIZE - 2)
+                pygame.draw.rect(self.screen, COLORS[cell], rect, border_radius=6)
+
+        # 6. Update Display and Regulate Speed
+        pygame.display.flip()
+        self.clock.tick(fps)  # Regulate frame rate so the human eye can track the agent
 
 if __name__ == "__main__":
     game = SnakeEnv()
