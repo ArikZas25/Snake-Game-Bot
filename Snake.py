@@ -33,7 +33,7 @@ class SnakeEnv:
     def step(self, action: int) -> Tuple[np.ndarray, float, bool]:
         if self.done:
             raise RuntimeError("You must call reset() before stepping a finished game.")
-
+        self.frame_iteration += 1
         directions = {
             0: (-1, 0),
             1: (0, 1),
@@ -54,6 +54,10 @@ class SnakeEnv:
         if new_head == self.food_pos:
             reward = 10.0
             self._spawn_food()
+            self.frame_iteration = 0
+        elif self.frame_iteration > 100 * len(self.snake):
+            self.frame_iteration = 0
+            self.done = True
         else:
             reward = -0.1
             tail_y, tail_x = self.snake.pop()
