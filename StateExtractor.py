@@ -4,78 +4,65 @@ import numpy as np
 class StateExtractor:
 
     @staticmethod
-    def is_collision(point: tuple, game) -> bool:
+    def cast_ray(game, start_y: int, start_x: int, dy: int, dx: int) -> float:
         """
-        Evaluates if a given (y, x) coordinate results in a terminal state.
+        Projects a ray in direction (dy, dx) and returns the inverse grid distance
+        to the nearest obstacle (wall or snake body).
         """
-        y, x = point
+        distance = 0
+        curr_y = start_y + dy
+        curr_x = start_x + dx
 
-        # 1. Boundary Collision Check
-        if y < 0 or y >= game.height or x < 0 or x >= game.width:
-            return True
+        while True:
+            distance += 1
 
-        # 2. Body Collision Check
-        if point in game.snake:
-            return True
+            # 1. Boundary Collision Check
+            if curr_y < 0 or curr_y >= game.height or curr_x < 0 or curr_x >= game.width:
+                break
 
-        return False
+            # 2. Body Collision Check
+            if (curr_y, curr_x) in game.snake:
+                break
+
+            # Step forward
+            curr_y += dy
+            curr_x += dx
+
+        # Return inverse distance (1.0 = immediate danger, approaching 0.0 = safe)
+        return 1.0 / distance
 
     @staticmethod
     def get_state(game, current_action: int) -> np.ndarray:
         """
-        Translates the absolute game board into an 11-element relative state vector.
+        Translates the game board into a 14-element continuous state vector.
         """
-        head = game.snake[0]
-        head_y, head_x = head
+        head_y, head_x = game.snake[0]
 
-        # Step 1: Define Absolute Adjacent Coordinates
-        point_u = (head_y - 1, head_x)
-        point_d = (head_y + 1, head_x)
-        point_l = (head_y, head_x - 1)
-        point_r = (head_y, head_x + 1)
-
-        # Step 2: Extract Current Heading
-        # Directions: 0: Up, 1: Right, 2: Down, 3: Left
-        dir_u = current_action == 0
-        dir_r = current_action == 1
-        dir_d = current_action == 2
-        dir_l = current_action == 3
-
-        # Step 3: Calculate Relative Danger (The most complex logical step)
-        danger_straight = (
-                (dir_u and StateExtractor.is_collision(point_u, game)) or
-                (dir_r and StateExtractor.is_collision(point_r, game)) or
-                (dir_d and StateExtractor.is_collision(point_d, game)) or
-                (dir_l and StateExtractor.is_collision(point_l, game))
-        )
-
-        danger_right = (
-                (dir_u and StateExtractor.is_collision(point_r, game)) or
-                (dir_r and StateExtractor.is_collision(point_d, game)) or
-                (dir_d and StateExtractor.is_collision(point_l, game)) or
-                (dir_l and StateExtractor.is_collision(point_u, game))
-        )
-
-        danger_left = (
-                (dir_u and StateExtractor.is_collision(point_l, game)) or
-                (dir_r and StateExtractor.is_collision(point_u, game)) or
-                (dir_d and StateExtractor.is_collision(point_r, game)) or
-                (dir_l and StateExtractor.is_collision(point_d, game))
-        )
-
-        # Step 4: Calculate Relative Food Location
-        food_y, food_x = game.food_pos
-        food_u = food_y < head_y
-        food_d = food_y > head_y
-        food_l = food_x < head_x
-        food_r = food_x > head_x
-
-        # Step 5: Construct and Cast the Vector
-        state = [
-            danger_straight, danger_right, danger_left,
-            dir_u, dir_r, dir_d, dir_l,
-            food_u, food_r, food_d, food_l
+        # Step 1: Raycast in 8 absolute directions
+        # Order: Up, Up-Right, Right, Down-Right, Down, Down-Left, Left, Up-Left
+        directions = [
+            (-1, 0), (-1, 1), (0, 1), (1, 1),
+            (1, 0), (1, -1), (0, -1), (-1, -1)
         ]
 
-        # Convert the boolean array to an integer array (1s and 0s)
-        return np.array(state, dtype=int)
+        ray_distances = [
+            StateExtractor.cast_ray(game, head_y, head_x, dy, dx)
+            for dy, dx in directions
+        ]
+
+        # Step 2: Extract Current Heading (One-hot encoded)
+        dir_u = 1.0 if current_action == 0 else 0.0
+        dir_r = 1.0 if current_action == 1 else 0.0
+        dir_d = 1.0 if current_action == 2 else 0.0
+        dir_l = 1.0 if current_action == 3 else 0.0
+
+        # Step 3: Calculate Relative Food Location (Normalized by board dimensions)
+        food_y, food_x = game.food_pos
+        rel_food_y = (food_y - head_y) / game.height
+        rel_food_x = (food_x - head_x) / game.width
+
+        # Step 4: Construct and Cast the Vector
+        state = ray_distances + [dir_u, dir_r, dir_d, dir_l, rel_food_y, rel_food_x]
+
+        # Cast to float32 - critical for PyTorch execution speed
+        return np.array(state, dtype=np.float32)

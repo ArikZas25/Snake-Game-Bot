@@ -17,6 +17,8 @@ class SnakeEnv:
         self.snake.clear()
         self.done = False
 
+        self.frame_iteration = 0
+
         mid_x = self.width // 2
         mid_y = self.height // 2
         self.snake.append((mid_y, mid_x))

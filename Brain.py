@@ -34,7 +34,7 @@ class Linear_QNet(nn.Module):
 # ── TEST IT ───────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     # Create the network: 11 inputs → 256 hidden → 4 outputs
-    model = Linear_QNet(input_size=11, hidden_size=256, output_size=4)
+    model = Linear_QNet(input_size=14, hidden_size=256, output_size=4)
 
     # Create a dummy state — 11 random float numbers simulating game state
     dummy_state = torch.rand(11)

@@ -22,7 +22,7 @@ class Agent:
         self.memory = deque(maxlen=MAX_MEMORY)
 
         # Instantiate the neural network (11 inputs, 256 hidden, 4 outputs)
-        self.model = Linear_QNet(11, 256, 4)
+        self.model = Linear_QNet(14, 256, 4)
 
         # Initialize the trainer with the learning rate and discount factor
         self.trainer = QTrainer(self.model, lr=LR, gamma=self.gamma)
