@@ -18,7 +18,7 @@ class Agent:
     def __init__(self):
         self.n_games = 0
         self.epsilon = 0  # Exploration parameter
-        self.gamma = 0.9  # Discount rate for future rewards
+        self.gamma = 0.99  # Discount rate for future rewards
 
         # O(1) time complexity for appending/popping from ends
         self.memory = deque(maxlen=MAX_MEMORY)
@@ -60,7 +60,7 @@ class Agent:
         Implements the epsilon-greedy policy for action selection.
         """
         # Epsilon decay: The randomness decreases linearly as n_games increases.
-        self.epsilon = max(10, 200 - self.n_games)
+        self.epsilon = max(0.05, self.epsilon * 0.995)
 
         if random.randint(0, 200) < self.epsilon:
             # Exploration: Choose a random action
