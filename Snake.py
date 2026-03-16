@@ -16,7 +16,6 @@ class SnakeEnv:
         self.board.fill(0)
         self.snake.clear()
         self.done = False
-
         self.frame_iteration = 0
 
         mid_x = self.width // 2
@@ -33,6 +32,7 @@ class SnakeEnv:
     def step(self, action: int) -> Tuple[np.ndarray, float, bool]:
         if self.done:
             raise RuntimeError("You must call reset() before stepping a finished game.")
+
         self.frame_iteration += 1
         directions = {
             0: (-1, 0),
@@ -45,26 +45,36 @@ class SnakeEnv:
         move_y, move_x = directions[action]
         new_head = (head_y + move_y, head_x + move_x)
 
+        # Wall collision
         if (new_head[0] < 0 or new_head[0] >= self.height or
                 new_head[1] < 0 or new_head[1] >= self.width):
             self.done = True
             return self.board.copy(), -10.0, self.done
 
         reward = 0.0
+
         if new_head == self.food_pos:
+            # Ate food
             reward = 10.0
             self._spawn_food()
             self.frame_iteration = 0
+
         elif self.frame_iteration > 100 * len(self.snake):
+            # Timeout — snake is looping
             self.frame_iteration = 0
-            reward = -11.0
             self.done = True
-            return self.board.copy(), reward, self.done
+            return self.board.copy(), -11.0, self.done
+
         else:
-            reward = 0
+            # Normal step — reward shaping based on distance to food
+            old_dist = abs(head_y - self.food_pos[0]) + abs(head_x - self.food_pos[1])
+            new_dist = abs(new_head[0] - self.food_pos[0]) + abs(new_head[1] - self.food_pos[1])
+            reward = 0.5 if new_dist < old_dist else -0.5
+
             tail_y, tail_x = self.snake.pop()
             self.board[tail_y, tail_x] = 0
 
+        # Self collision
         if new_head in self.snake:
             self.done = True
             return self.board.copy(), -10.0, self.done
@@ -99,9 +109,9 @@ class SnakeEnv:
         CELL_SIZE = 40
         COLORS = {
             0: (30, 30, 30),
-            1: (0, 255, 100),  # head
-            2: (0, 180, 60),  # body
-            3: (255, 60, 60),  # food
+            1: (0, 255, 100),   # head
+            2: (0, 180, 60),    # body
+            3: (255, 60, 60),   # food
         }
         BG_COLOR = (20, 20, 20)
         TEXT_COLOR = (255, 255, 255)
@@ -118,7 +128,7 @@ class SnakeEnv:
 
         running = True
         while running:
-            clock.tick(4)  # speed — increase for faster snake
+            clock.tick(4)
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -135,7 +145,6 @@ class SnakeEnv:
                     elif event.key == pygame.K_q:
                         running = False
 
-            # Move the snake every frame
             _, reward, self.done = self.step(current_action)
             if reward == 10.0:
                 score += 1
@@ -143,7 +152,6 @@ class SnakeEnv:
             if self.done:
                 running = False
 
-            # Draw
             screen.fill(BG_COLOR)
             score_text = font.render(f"Score: {score}", True, TEXT_COLOR)
             screen.blit(score_text, (10, 5))
@@ -156,7 +164,6 @@ class SnakeEnv:
 
             pygame.display.flip()
 
-        # Game over screen
         screen.fill(BG_COLOR)
         over_text = font.render(f"Game Over! Score: {score}", True, TEXT_COLOR)
         screen.blit(over_text, (self.width * CELL_SIZE // 2 - 120, self.height * CELL_SIZE // 2))
@@ -165,13 +172,8 @@ class SnakeEnv:
         pygame.quit()
 
     def render(self, score: int = 0, record: int = 0, fps: int = 10) -> None:
-        """
-        Renders a single frame of the environment using Pygame.
-        Lazily initializes the Pygame window to avoid overhead during headless training.
-        """
         import pygame
 
-        # 1. Lazy Initialization
         if not hasattr(self, 'screen'):
             pygame.init()
             self.CELL_SIZE = 40
@@ -180,37 +182,33 @@ class SnakeEnv:
             self.font = pygame.font.SysFont("Arial", 24)
             self.clock = pygame.time.Clock()
 
-        # 2. Event Pumping (Prevents OS "Not Responding" errors)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 quit()
 
-        # 3. Define Constants
         COLORS = {
             0: (30, 30, 30),
-            1: (0, 255, 100),  # head
-            2: (0, 180, 60),  # body
-            3: (255, 60, 60),  # food
+            1: (0, 255, 100),
+            2: (0, 180, 60),
+            3: (255, 60, 60),
         }
         BG_COLOR = (20, 20, 20)
         TEXT_COLOR = (255, 255, 255)
 
-        # 4. Draw Background and Text
         self.screen.fill(BG_COLOR)
         score_text = self.font.render(f"Score: {score} | Record: {record}", True, TEXT_COLOR)
         self.screen.blit(score_text, (10, 5))
 
-        # 5. Draw the Grid
         for y in range(self.height):
             for x in range(self.width):
                 cell = self.board[y][x]
                 rect = pygame.Rect(x * self.CELL_SIZE, y * self.CELL_SIZE + 40, self.CELL_SIZE - 2, self.CELL_SIZE - 2)
                 pygame.draw.rect(self.screen, COLORS[cell], rect, border_radius=6)
 
-        # 6. Update Display and Regulate Speed
         pygame.display.flip()
-        self.clock.tick(fps)  # Regulate frame rate so the human eye can track the agent
+        self.clock.tick(fps)
+
 
 if __name__ == "__main__":
     game = SnakeEnv()
