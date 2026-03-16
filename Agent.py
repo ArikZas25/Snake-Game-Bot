@@ -8,7 +8,7 @@ from Brain import Linear_QNet, QTrainer
 
 # Hyperparameters
 MAX_MEMORY = 100_000
-BATCH_SIZE = 1000
+BATCH_SIZE = 128
 LR = 0.001
 
 
@@ -58,7 +58,7 @@ class Agent:
         Implements the epsilon-greedy policy for action selection.
         """
         # Epsilon decay: The randomness decreases linearly as n_games increases.
-        self.epsilon = max(0, 200 - self.n_games)
+        self.epsilon = max(10, 200 - self.n_games)
 
         if random.randint(0, 200) < self.epsilon:
             # Exploration: Choose a random action

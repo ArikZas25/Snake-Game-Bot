@@ -57,11 +57,11 @@ class SnakeEnv:
             self.frame_iteration = 0
         elif self.frame_iteration > 100 * len(self.snake):
             self.frame_iteration = 0
-            reward = -15.0
+            reward = -10.0
             self.done = True
             return self.board.copy(), reward, self.done
         else:
-            reward = -0.1
+            reward = 0
             tail_y, tail_x = self.snake.pop()
             self.board[tail_y, tail_x] = 0
 
