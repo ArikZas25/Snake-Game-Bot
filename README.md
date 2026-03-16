@@ -82,6 +82,16 @@ Rather than feeding the whole 10×10 board (100 numbers) to the AI, we give it 1
 
 The AI starts completely random and gradually learns which moves lead to food and which lead to death.
 
+### AI Evolution Showcase
+
+#### Run 0: Random Exploration
+![Run 0 Showcase](run_0_showcase.gif)
+
+#### Run 500: Learning Boundaries
+![Run 500 Showcase](run_500_showcase.gif)
+
+#### Run 1400: High Performance
+![Run 1400 Showcase](run_1400_showcase.gif)
 ---
 
 ## ⚙️ Tech Stack
