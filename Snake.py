@@ -1,7 +1,7 @@
 import numpy as np
 from collections import deque
 from typing import Tuple
-
+from StateExtractor import StateExtractor
 
 class SnakeEnv:
     def __init__(self, width: int = 10, height: int = 10) -> None:
@@ -45,30 +45,49 @@ class SnakeEnv:
         move_y, move_x = directions[action]
         new_head = (head_y + move_y, head_x + move_x)
 
+        # 1. Check for wall collisions
         if (new_head[0] < 0 or new_head[0] >= self.height or
                 new_head[1] < 0 or new_head[1] >= self.width):
             self.done = True
             return self.board.copy(), -10.0, self.done
 
         reward = 0.0
+        # 2. Check for food consumption
         if new_head == self.food_pos:
             reward = 10.0
             self._spawn_food()
             self.frame_iteration = 0
+        # 3. Check for starvation (looping indefinitely)
         elif self.frame_iteration > 100 * len(self.snake):
             self.frame_iteration = 0
             reward = -11.0
             self.done = True
             return self.board.copy(), reward, self.done
+        # 4. Default move (empty square)
         else:
             reward = 0
             tail_y, tail_x = self.snake.pop()
             self.board[tail_y, tail_x] = 0
 
+            # --- REWARD SHAPING IMPLEMENTATION ---
+            # Calculate the contiguous safe area starting from the new head position
+            available_volume = StateExtractor.flood_fill(self, new_head[0], new_head[1])
+
+            # The true mass of the snake is its current length in memory + 1 (the new head)
+            snake_mass = len(self.snake) + 1
+
+            # If the volume of the space is less than the snake's mass, it is a deterministic trap
+            if available_volume < snake_mass:
+                reward = -5.0  # Apply the intermediate penalty
+            # -------------------------------------
+
+        # 5. Check for body collisions
         if new_head in self.snake:
             self.done = True
+            # This terminal penalty will safely overwrite the -5.0 if the trap causes immediate death
             return self.board.copy(), -10.0, self.done
 
+        # 6. Update internal state
         self.snake.appendleft(new_head)
 
         if len(self.snake) > 1:

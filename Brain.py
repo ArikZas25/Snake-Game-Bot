@@ -19,25 +19,25 @@ import torch.optim as optim
 
 # ── THE NETWORK ───────────────────────────────────────────────────────────────
 class Linear_QNet(nn.Module):
-    def __init__(self, input_size: int, hidden_size: int, output_size: int):
+    def __init__(self, input_size: int, hidden_size_1: int, hidden_size_2: int, output_size: int):
         super().__init__()
-        self.fc1 = nn.Linear(input_size, hidden_size)   # layer 1
-        self.fc2 = nn.Linear(hidden_size, output_size)  # layer 2
+        self.fc1 = nn.Linear(input_size, hidden_size_1)   # Layer 1
+        self.fc2 = nn.Linear(hidden_size_1, hidden_size_2) # Layer 2
+        self.fc3 = nn.Linear(hidden_size_2, output_size)  # Layer 3 (Output)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = F.relu(self.fc1(x))  # pass through layer 1, then ReLU
-        x = self.fc2(x)          # pass through layer 2 (no ReLU at output)
+        x = F.relu(self.fc1(x))  # Pass through layer 1, apply ReLU
+        x = F.relu(self.fc2(x))  # Pass through layer 2, apply ReLU
+        x = self.fc3(x)          # Pass through layer 3 (raw Q-values, no ReLU)
         return x
-
-# 11 inputs → 256 hidden → 4 outputs
 
 # ── TEST IT ───────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    # Create the network: 11 inputs → 256 hidden → 4 outputs
+    # Create the network: 18 inputs → 256 hidden → 4 outputs
     model = Linear_QNet(input_size=18, hidden_size=256, output_size=4)
 
-    # Create a dummy state — 11 random float numbers simulating game state
-    dummy_state = torch.rand(11)
+    # Create a dummy state — 18 random float numbers simulating game state
+    dummy_state = torch.rand(18)
     print(f"Input:  {dummy_state}")
     print(f"Shape:  {dummy_state.shape}")
 

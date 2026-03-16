@@ -23,8 +23,8 @@ class Agent:
         # O(1) time complexity for appending/popping from ends
         self.memory = deque(maxlen=MAX_MEMORY)
 
-        # Instantiate the neural network (11 inputs, 256 hidden, 3 outputs)
-        self.model = Linear_QNet(18, 256, 3)
+        # Instantiate the neural network (14 inputs, 256 hidden,128 hidden, 3 outputs)
+        self.model = Linear_QNet(14, 256, 128, 3)
 
         # Initialize the trainer with the learning rate and discount factor
         self.trainer = QTrainer(self.model, lr=LR, gamma=self.gamma)

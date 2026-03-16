@@ -73,42 +73,51 @@ class StateExtractor:
     def get_state(game, current_action: int) -> np.ndarray:
         head_y, head_x = game.snake[0]
 
-        # Step 1: Raycast in 8 absolute directions
-        directions = [
-            (-1, 0), (-1, 1), (0, 1), (1, 1),
-            (1, 0), (1, -1), (0, -1), (-1, -1)
-        ]
-        ray_distances = [
-            StateExtractor.cast_ray(game, head_y, head_x, dy, dx)
-            for dy, dx in directions
-        ]
+        # 1. Define Ego-centric basis vectors based on current heading
+        # Clockwise: 0=Up, 1=Right, 2=Down, 3=Left
+        clock_wise = [(-1, 0), (0, 1), (1, 0), (0, -1)]
 
-        # Step 2: Extract Current Heading
-        dir_u = 1.0 if current_action == 0 else 0.0
-        dir_r = 1.0 if current_action == 1 else 0.0
-        dir_d = 1.0 if current_action == 2 else 0.0
-        dir_l = 1.0 if current_action == 3 else 0.0
+        forward = clock_wise[current_action]
+        right = clock_wise[(current_action + 1) % 4]
+        backward = clock_wise[(current_action + 2) % 4]
+        left = clock_wise[(current_action + 3) % 4]
 
-        # Step 3: Calculate Relative Food Location
+        # 2. Project Food Position (Dot Product)
         food_y, food_x = game.food_pos
-        rel_food_y = (food_y - head_y) / game.height
-        rel_food_x = (food_x - head_x) / game.width
+        food_dy = food_y - head_y
+        food_dx = food_x - head_x
 
-        # Step 4: Simulate adjacent moves and calculate Flood Fill volumes
-        # Order must match action indices: Up (0), Right (1), Down (2), Left (3)
-        action_deltas = [(-1, 0), (0, 1), (1, 0), (0, -1)]
+        # Normalize by board dimensions
+        max_dim = max(game.height, game.width)
+        food_forward = (food_dy * forward[0] + food_dx * forward[1]) / max_dim
+        food_right = (food_dy * right[0] + food_dx * right[1]) / max_dim
+
+        # 3. Rotated Flood Fill Volumes
+        relative_deltas = [forward, right, backward, left]
+        flood_fill_areas = []
         total_board_area = game.width * game.height
 
-        flood_fill_areas = []
-        for dy, dx in action_deltas:
+        for dy, dx in relative_deltas:
             simulated_y = head_y + dy
             simulated_x = head_x + dx
             raw_area = StateExtractor.flood_fill(game, simulated_y, simulated_x)
-            # Normalize between 0.0 and 1.0
             flood_fill_areas.append(raw_area / total_board_area)
 
-        # Step 5: Construct the Final Vector
-        # 8 (rays) + 4 (directions) + 2 (food) + 4 (flood fills) = 18 total inputs
-        state = ray_distances + flood_fill_areas + [dir_u, dir_r, dir_d, dir_l, rel_food_y, rel_food_x]
+        # 4. Rotated 8-Directional Raycasts
+        clock_wise_8 = [
+            (-1, 0), (-1, 1), (0, 1), (1, 1),
+            (1, 0), (1, -1), (0, -1), (-1, -1)
+        ]
+
+        ray_distances = []
+        start_idx = current_action * 2
+        for i in range(8):
+            idx = (start_idx + i) % 8
+            dy, dx = clock_wise_8[idx]
+            ray_distances.append(StateExtractor.cast_ray(game, head_y, head_x, dy, dx))
+
+        # 5. Construct Final 14-Dimensional Vector
+        # 8 (rays) + 4 (flood fills) + 2 (food projections) = 14 inputs total
+        state = ray_distances + flood_fill_areas + [food_forward, food_right]
 
         return np.array(state, dtype=np.float32)
