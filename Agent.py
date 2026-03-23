@@ -3,8 +3,7 @@ import random
 import numpy as np
 from collections import deque
 from Snake import SnakeEnv
-from StateExtractor import StateExtractor
-from Brain import Linear_QNet, QTrainer
+from Brain import CNN_QNet, QTrainer
 import json
 import os
 
@@ -13,20 +12,33 @@ BATCH_SIZE = 1000
 LR = 0.001
 
 
+def get_state(game: SnakeEnv) -> np.ndarray:
+    h, w = game.height, game.width
+    head_ch = np.zeros((h, w), dtype=np.float32)
+    body_ch = np.zeros((h, w), dtype=np.float32)
+    food_ch = np.zeros((h, w), dtype=np.float32)
+
+    snake_list = list(game.snake)
+    if snake_list:
+        head_ch[snake_list[0]] = 1.0
+        for seg in snake_list[1:]:
+            body_ch[seg] = 1.0
+
+    food_ch[game.food_pos] = 1.0
+
+    return np.stack([head_ch, body_ch, food_ch])  # shape: (3, 10, 10)
+
+
 class Agent:
     def __init__(self):
         self.n_games = 0
-        self.epsilon = 80
-        self.gamma = 0.99
+        self.epsilon = 200
+        self.gamma   = 0.99
 
-        self.memory = deque(maxlen=MAX_MEMORY)
+        self.memory  = deque(maxlen=MAX_MEMORY)
 
-        # 21 inputs: 8 rays + 4 flood fills + 4 directions + 2 food + 3 trap scores
-        self.model = Linear_QNet(21, 256, 3)
+        self.model   = CNN_QNet(output_size=3)
         self.trainer = QTrainer(self.model, lr=LR, gamma=self.gamma)
-
-    def get_state(self, game, current_action: int) -> np.ndarray:
-        return StateExtractor.get_state(game, current_action)
 
     def remember(self, state, action, reward, next_state, done):
         self.memory.append((state, action, reward, next_state, done))
@@ -38,27 +50,31 @@ class Agent:
             mini_sample = list(self.memory)
 
         states, actions, rewards, next_states, dones = zip(*mini_sample)
-        self.trainer.train_step(states, actions, rewards, next_states, dones)
+        self.trainer.train_step(
+            np.array(states),
+            actions,
+            rewards,
+            np.array(next_states),
+            dones,
+        )
 
     def train_short_memory(self, state, action, reward, next_state, done):
         self.trainer.train_step(state, action, reward, next_state, done)
 
     def get_action(self, state: np.ndarray) -> int:
-        self.epsilon = max(5, self.epsilon * 0.997)
-
         if random.randint(0, 200) < self.epsilon:
             return random.randint(0, 2)
 
-        state_tensor = torch.tensor(state, dtype=torch.float)
-        prediction = self.model(state_tensor)
+        state_tensor = torch.tensor(state, dtype=torch.float).unsqueeze(0)
+        prediction   = self.model(state_tensor)
         return torch.argmax(prediction).item()
 
 
 def train():
     record = 0
-    score = 0
-    agent = Agent()
-    game = SnakeEnv()
+    score  = 0
+    agent  = Agent()
+    game   = SnakeEnv()
     game.reset()
 
     current_action = 1
@@ -70,7 +86,7 @@ def train():
     while True:
         is_recording = (agent.n_games % 100 == 0)
 
-        state_old = agent.get_state(game, current_action)
+        state_old     = get_state(game)
         relative_move = agent.get_action(state_old)
 
         clock_wise = [0, 1, 2, 3]
@@ -93,11 +109,11 @@ def train():
         if is_recording:
             step_history.append({
                 "snake": [[int(y), int(x)] for y, x in game.snake],
-                "food": [int(game.food_pos[0]), int(game.food_pos[1])],
-                "score": score
+                "food":  [int(game.food_pos[0]), int(game.food_pos[1])],
+                "score": score,
             })
 
-        state_new = agent.get_state(game, current_action)
+        state_new = get_state(game)
         agent.train_short_memory(state_old, relative_move, reward, state_new, done)
         agent.remember(state_old, relative_move, reward, state_new, done)
 
@@ -112,6 +128,7 @@ def train():
             game.reset()
             agent.n_games += 1
             agent.train_long_memory()
+            agent.epsilon = max(5, agent.epsilon - 0.1)
 
             if score > record:
                 record = score
